@@ -1,0 +1,12 @@
+# 核心（点云/网格生成 + 预览图），任何环境都能跑：
+numpy
+pillow
+matplotlib
+
+# 真正的深度估计需要下面这些（首次运行会自动下载模型权重，需要联网）：
+torch
+transformers          # 用于 Depth Anything V2 (backend="depth_anything")
+timm                  # transformers depth模型的依赖
+
+# 可选：交互式3D查看器 / 更强的点云后处理（Poisson重建等），本项目核心功能不依赖它
+# open3d
