@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="260" viewBox="0 0 1000 260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <linearGradient id="depth" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f6f8fa"/>
+      <stop offset="1" stop-color="#24292f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- card background so the diagram stays readable in GitHub dark mode -->
+  <rect x="0.5" y="0.5" width="999" height="259" rx="14" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- 1. RGB image -->
+  <g transform="translate(24,58)">
+    <rect width="150" height="120" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+    <rect x="25" y="18" width="100" height="58" rx="4" fill="#ddf4ff" stroke="#54aeff"/>
+    <circle cx="105" cy="34" r="7" fill="#fff8c5" stroke="#d4a72c"/>
+    <path d="M27,74 L58,44 L80,64 L94,52 L123,74 z" fill="#aceebb" stroke="#4ac26b"/>
+    <text x="75" y="98" text-anchor="middle" font-size="14" font-weight="600" fill="#24292f">RGB image</text>
+    <text x="75" y="113" text-anchor="middle" font-size="11" fill="#57606a">single photo</text>
+  </g>
+
+  <line x1="178" y1="118" x2="208" y2="118" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 2. Depth network -->
+  <g transform="translate(212,58)">
+    <rect width="170" height="120" rx="10" fill="#fbefff" stroke="#c297ff"/>
+    <text x="85" y="34" text-anchor="middle" font-size="14" font-weight="600" fill="#24292f">Monocular depth</text>
+    <text x="85" y="58" text-anchor="middle" font-size="12" fill="#8250df">Depth Anything V2</text>
+    <text x="85" y="76" text-anchor="middle" font-size="12" fill="#8250df">or MiDaS (small)</text>
+    <text x="85" y="102" text-anchor="middle" font-size="11" fill="#57606a">PyTorch · CUDA / MPS / CPU</text>
+  </g>
+
+  <line x1="386" y1="118" x2="416" y2="118" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 3. Depth map -->
+  <g transform="translate(420,58)">
+    <rect width="150" height="120" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+    <rect x="25" y="18" width="100" height="58" rx="4" fill="url(#depth)" stroke="#8c959f"/>
+    <text x="75" y="98" text-anchor="middle" font-size="14" font-weight="600" fill="#24292f">Depth map</text>
+    <text x="75" y="113" text-anchor="middle" font-size="11" fill="#57606a">relative scale</text>
+  </g>
+
+  <line x1="574" y1="118" x2="604" y2="118" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 4. Back-projection -->
+  <g transform="translate(608,58)">
+    <rect width="170" height="120" rx="10" fill="#fff8c5" stroke="#d4a72c"/>
+    <text x="85" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="#24292f">Pinhole back-projection</text>
+    <text x="85" y="58" text-anchor="middle" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#24292f">X = (u − cx)·Z / fx</text>
+    <text x="85" y="78" text-anchor="middle" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#24292f">Y = (v − cy)·Z / fy</text>
+    <text x="85" y="104" text-anchor="middle" font-size="11" fill="#57606a">pure NumPy</text>
+  </g>
+
+  <!-- fork to outputs -->
+  <path d="M782,118 L812,118 L812,74 L838,74" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M812,118 L812,162 L838,162" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 5a. Point cloud -->
+  <g transform="translate(842,44)">
+    <rect width="134" height="60" rx="10" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="67" y="26" text-anchor="middle" font-size="14" font-weight="600" fill="#24292f">Point cloud</text>
+    <text x="67" y="45" text-anchor="middle" font-size="11" fill="#1a7f37">.ply + preview .png</text>
+  </g>
+
+  <!-- 5b. Mesh -->
+  <g transform="translate(842,132)">
+    <rect width="134" height="60" rx="10" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="67" y="26" text-anchor="middle" font-size="14" font-weight="600" fill="#24292f">Triangle mesh</text>
+    <text x="67" y="45" text-anchor="middle" font-size="11" fill="#1a7f37">.obj (2×2 px → 2 tris)</text>
+  </g>
+
+  <text x="500" y="228" text-anchor="middle" font-size="12" fill="#57606a">Output opens in Blender · MeshLab · Open3D · Unity · Godot</text>
+</svg>

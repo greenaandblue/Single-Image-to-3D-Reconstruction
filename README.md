@@ -1,108 +1,142 @@
-# Single-Image-to-3D-Reconstruction
+# Single Image → 3D Reconstruction
 
-单目视觉 3D 重建系统：从一张 RGB 图片估计深度，重建出点云 / 三角网格模型。
+**English** | [中文](README.zh-CN.md)
+
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-depth%20models-EE4C2C?logo=pytorch&logoColor=white)
+![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Depth%20Anything%20V2-FFD21E)
+![NumPy](https://img.shields.io/badge/geometry-pure%20NumPy-013243?logo=numpy)
+
+Turn **one ordinary photo** into a **colored 3D point cloud** and a **triangle mesh**.
+The pipeline estimates per-pixel depth with a pretrained monocular network (Depth Anything V2), back-projects every pixel through a pinhole camera model, and writes standard `.ply` / `.obj` files you can open in Blender, MeshLab, Open3D, Unity or Godot.
+
+<p align="center">
+  <img src="docs/pipeline.svg" width="100%" alt="Pipeline: RGB image → monocular depth network → depth map → pinhole back-projection → point cloud and mesh">
+</p>
+
+## Features
+
+- **One command, end to end.** Photo → depth map → point cloud → mesh → preview image.
+- **Two depth backends.** Depth Anything V2 Small (default, via 🤗 Transformers) or MiDaS small (experimental, via `torch.hub`).
+- **Runs anywhere.** Device is picked automatically: CUDA → Apple Silicon `mps` → CPU.
+- **Dependency-light geometry.** Back-projection, meshing and `.ply`/`.obj` export are pure NumPy, with no Open3D required.
+- **Clean meshes at object edges.** Triangles that span a large depth jump are dropped, so foreground objects don't get "welded" to the background.
+- **Offline test mode.** `--use_fake_depth` checks the whole geometry pipeline without PyTorch or a model download.
+
+## Quick start
+
+```bash
+git clone https://github.com/greenaandblue/Single-Image-to-3D-Reconstruction.git
+cd Single-Image-to-3D-Reconstruction
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+python demo.py --image examples/tulips.jpg --out outputs
+```
+
+The first run downloads the model weights from Hugging Face (needs internet). Results land in `outputs/`:
+
+| File | What it is |
+|---|---|
+| `depth.png` | Normalized depth map (brighter = farther) |
+| `pointcloud.ply` | Colored point cloud (ASCII PLY) |
+| `pointcloud_preview.png` | Static 3D preview rendered with Matplotlib, with no 3D viewer needed |
+| `mesh.obj` | Triangle mesh; vertex colors use the common `v x y z r g b` extension |
+
+<!--
+Results: after running the demo, copy outputs/depth.png and outputs/pointcloud_preview.png
+into docs/ and uncomment this table.
+
+| Input | Depth | Point cloud |
+|---|---|---|
+| <img src="examples/tulips.jpg" width="260"> | <img src="docs/tulips_depth.png" width="260"> | <img src="docs/tulips_pointcloud.png" width="260"> |
+-->
+
+## Usage
+
+```bash
+python demo.py --image <photo> [--out outputs] [--backend depth_anything|midas]
+               [--mode both|pointcloud|mesh] [--max_points 200000] [--use_fake_depth]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--image` | required | Input photo (any format Pillow can read) |
+| `--out` | `outputs` | Output folder |
+| `--backend` | `depth_anything` | `depth_anything` (Depth Anything V2 Small) or `midas` (MiDaS small, experimental) |
+| `--mode` | `both` | `pointcloud`, `mesh`, or `both` |
+| `--max_points` | `200000` | Random down-sampling cap for the point cloud |
+| `--use_fake_depth` | off | Skip the network and use a synthetic bowl-shaped depth map, useful for testing without PyTorch |
+
+Use it from Python:
+
+```python
+from src.io_utils import load_image, save_point_cloud_ply
+from src.depth_estimation import DepthEstimator
+from src.geometry import CameraIntrinsics, depth_to_pointcloud
+
+image = load_image("examples/tulips.jpg")             # (H, W, 3) uint8
+depth = DepthEstimator("depth_anything").estimate(image)
+h, w = image.shape[:2]
+points, colors = depth_to_pointcloud(depth, image, CameraIntrinsics(width=w, height=h))
+save_point_cloud_ply(points, colors, "tulips.ply")
+```
+
+## How it works
+
+**1. Monocular depth.** `DepthEstimator` runs Depth Anything V2 (or MiDaS) and resizes the prediction back to the input resolution. Both networks output *relative*, disparity-like values (larger = closer), which are flipped so that larger = farther.
+
+**2. Back-projection.** Each pixel $(u, v)$ with depth $Z$ becomes a 3D point using the pinhole model:
+
+$$
+X = \frac{(u - c_x)\,Z}{f_x}, \qquad Y = \frac{(v - c_y)\,Z}{f_y}
+$$
+
+Without real calibration, the intrinsics default to $f_x = f_y = 1.2\,W$ and $(c_x, c_y)$ at the image center. Pass real values to `CameraIntrinsics(...)` if you know your camera.
+
+**3. Meshing.** Instead of Poisson reconstruction (meant for dense multi-view scans), the depth grid is triangulated directly: every 2×2 pixel block becomes two triangles. A triangle is skipped when its depth range exceeds `edge_threshold_ratio` (5 %) of its mean depth, which removes the stretched "curtain" faces along object boundaries.
+
+## Performance tip
+
+Meshing loops over every pixel in Python, so cost grows with resolution. On CPU, a 960×720 image takes about 18 s and produces a ~65 MB `.obj`. A full-resolution 24 MP phone photo would take many minutes and gigabytes, so **resize to ~1000 px first**:
+
+```bash
+sips -Z 1024 photo.jpg --out photo_small.jpg                                       # macOS
+python -c "from PIL import Image; im=Image.open('photo.jpg'); im.thumbnail((1024,1024)); im.save('photo_small.jpg')"
+```
+
+## Limitations
+
+- **2.5D, not a full model.** One view can't see the back or occluded parts, so the output is a "depth relief" surface, not a closed mesh.
+- **No absolute scale.** Monocular depth is relative; sizes are proportional, not metric.
+- **Estimated intrinsics.** Shapes look plausible, but they are not calibrated measurements.
+
+## Project structure
 
 ```
-RGB Image
-    |
-    v
-Depth Estimation (Depth Anything V2 / MiDaS)
-    |
-    v
-Depth Map
-    |
-    v
-Point Cloud  (针孔相机模型反投影)
-    |
-    v
-Triangle Mesh (深度图直接三角化)
-    |
-    v
-.ply / .obj  ->  Blender / MeshLab / Open3D / Unity
-```
-
-## 目录结构
-
-```
-img23d/
-├── demo.py                  # 主入口
+├── demo.py                  End-to-end CLI
 ├── requirements.txt
 ├── src/
-│   ├── depth_estimation.py  # 深度估计 (Depth Anything V2 / MiDaS)
-│   ├── geometry.py          # 深度图 -> 点云 / 网格 (纯 numpy 实现)
-│   ├── io_utils.py          # 读图 / 存 obj / ply
-│   └── visualize.py         # matplotlib 预览 + open3d 交互查看
-└── examples/
-    └── test_input.jpg       # 测试图片
+│   ├── depth_estimation.py  DepthEstimator (Depth Anything V2 / MiDaS)
+│   ├── geometry.py          CameraIntrinsics, depth → point cloud / mesh (NumPy)
+│   ├── io_utils.py          Image loading, depth PNG, PLY / OBJ writers
+│   └── visualize.py         Matplotlib preview, optional Open3D viewer
+├── examples/                Sample inputs (+ sample_output/ from the synthetic-depth test)
+└── docs/pipeline.svg
 ```
 
-## 安装
+## Ideas for extension
 
-```bash
-pip install -r requirements.txt
-```
+- **Real-time:** feed webcam frames to `DepthEstimator` for a live depth / point-cloud demo.
+- **Multi-view fusion:** back-project several photos of one object and register them with ICP to fill in hidden surfaces.
+- **NeRF / Instant-NGP:** train on 20–50 views for photorealistic, complete scenes.
+- **Open3D post-processing:** statistical outlier removal, normal estimation and Poisson reconstruction for smoother, watertight meshes.
 
-第一次跑 `depth_anything` 或 `midas` 会自动从 HuggingFace / torch hub 下载模型权重，需要联网。
+## Acknowledgments
 
-## 使用
+- [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) (`depth-anything/Depth-Anything-V2-Small-hf` on Hugging Face)
+- [MiDaS](https://github.com/isl-org/MiDaS) by Intel ISL
 
-```bash
-# 完整流程：图片 -> 深度 -> 点云 + 网格
-python demo.py --image examples/test_input.jpg --out outputs --backend depth_anything
+## Author
 
-# 只要点云
-python demo.py --image your_photo.jpg --out outputs --mode pointcloud
-
-# 只要网格 (.obj，可以直接拖进 Blender)
-python demo.py --image your_photo.jpg --out outputs --mode mesh
-
-# 没装 torch，想先测试点云/网格代码本身对不对：
-python demo.py --image examples/test_input.jpg --out outputs --use_fake_depth
-```
-
-输出：
-
-- `outputs/depth.png` — 深度图（灰度，越亮越远）
-- `outputs/pointcloud.ply` — 点云，可用 MeshLab / Open3D / Blender 打开
-- `outputs/mesh.obj` — 三角网格，可直接拖进 Blender / Unity / Godot
-- `outputs/pointcloud_preview.png` — 静态预览图（不需要任何 3D 软件就能看效果）
-
-## 原理说明
-
-### 1. 深度估计
-
-`src/depth_estimation.py` 里的 `DepthEstimator` 支持两个后端：
-
-- `depth_anything`（推荐）：HuggingFace 上的 `Depth-Anything-V2-Small`，速度快、效果好，CPU 也能跑（会比较慢）。
-- `midas`：`intel-isl/MiDaS` 的 `MiDaS_small`，通过 `torch.hub` 加载。
-
-两者输出的都是**相对深度**（不是米/厘米这种绝对尺度）——单张 2D 图片本质上无法恢复真实世界的绝对尺度，这是单目重建的固有限制。
-
-### 2. 深度图 → 点云
-
-`src/geometry.py` 里的 `depth_to_pointcloud`，用针孔相机模型：
-
-```
-Z = depth
-X = (u - cx) * Z / fx
-Y = (v - cy) * Z / fy
-```
-
-因为没有真实相机的内参（fx, fy, cx, cy），代码里用经验值估算（`CameraIntrinsics` 默认 `fx = fy = width * 1.2`），这样重建出来的形状比例是合理的，但不代表真实物理尺寸。如果你知道拍照手机的真实焦距/传感器参数，可以在 `CameraIntrinsics(...)` 里手动传入更准确的值。
-
-### 3. 点云 → 网格
-
-没有用 Poisson 重建（那个更适合处理稠密、多视角扫描得到的点云），而是直接把深度图按像素网格三角化（每个 2×2 像素格子拆成 2 个三角形），这是单张深度图转 mesh 最直接、最快的方法。为了避免物体边缘和背景被错误地"焊"在一起形成拉长的穿帮面片，加入了深度断层检测（`edge_threshold_ratio`），深度跳变过大的三角形会被跳过。
-
-## 局限性（诚实说明）
-
-- 单张图片**无法**恢复背面/被遮挡部分的几何 —— 输出的是一个"深度浮雕"式的 2.5D 网格，而不是完整的封闭 3D 模型。真正的完整 3D 需要多视角（参考下面"进阶方向"）。
-- 深度是相对值，没有真实尺度。
-- 相机内参是估算值，不是真实标定结果。
-
-## 进阶方向（如果想做成更完整的研究/作品集项目）
-
-1. **实时版本**：把 `DepthEstimator` 换成摄像头逐帧输入，做成实时深度可视化 demo（适合展示 Robotics/CV 背景）。
-2. **多视角融合**：拍摄同一物体的多张照片，各自反投影出点云后用 ICP 对齐、合并，能重建出更完整的模型。
-3. **NeRF / Instant-NGP**：用 20-50 张多视角照片训练一个神经辐射场，是目前更前沿的做法，能得到照片级真实的完整 3D 场景，但训练成本更高。
-4. **Open3D 后处理**：如果本地装了 `open3d`，可以用它做点云降噪（statistical outlier removal）、法线估计 + Poisson 重建，得到更平滑封闭的网格。
+**Huihang Liu** · Computer Engineering, Penn State · [@greenaandblue](https://github.com/greenaandblue)
